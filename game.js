@@ -1,9 +1,20 @@
 class Game {
     constructor() {
+        if (Game.instance) {
+            return Game.instance;
+        }
+        Game.instance = this;
+
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.resizeCanvas();
+        
+        // Game timing
+        this.lastTime = 0;
+        this.deltaTime = 0;
+        this.fixedTimeStep = 1000 / 60; // 60 FPS
+        this.timeAccumulator = 0;
         
         // Initialize Hammer.js with better touch handling
         this.hammer = new Hammer.Manager(this.canvas, {
@@ -269,7 +280,9 @@ class Game {
             this.resizeCanvas();
         }
         
-        this.gameLoop();
+        this.lastTime = 0;
+        this.timeAccumulator = 0;
+        requestAnimationFrame((time) => this.gameLoop(time));
         this.spawnLemons();
     }
 
@@ -576,13 +589,93 @@ class Game {
         }
     }
 
-    gameLoop() {
+    gameLoop(currentTime) {
         if (!this.gameActive) return;
+
+        if (!this.lastTime) {
+            this.lastTime = currentTime;
+        }
+
+        // Calculate time since last frame
+        this.deltaTime = Math.min(currentTime - this.lastTime, 32); // Cap at ~30 FPS minimum
+        this.lastTime = currentTime;
         
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Accumulate time for fixed timestep updates
+        this.timeAccumulator += this.deltaTime;
+
+        // Update game state with fixed timestep
+        while (this.timeAccumulator >= this.fixedTimeStep) {
+            this.updateGame(this.fixedTimeStep);
+            this.timeAccumulator -= this.fixedTimeStep;
+        }
+
+        // Render at whatever frame rate the browser provides
+        this.render();
         
-        // Update and draw floating texts
+        requestAnimationFrame((time) => this.gameLoop(time));
+    }
+
+    updateGame(deltaMs) {
+        // Convert milliseconds to seconds for physics calculations
+        const dt = deltaMs / 1000;
+        
+        // Update floating texts
         this.updateFloatingTexts();
+        
+        // Update lemons
+        for (let i = this.lemons.length - 1; i >= 0; i--) {
+            const lemon = this.lemons[i];
+            
+            if (!lemon.sliced) {
+                lemon.x += lemon.speedX * dt * 60; // Scale by 60 to maintain original speed values
+                lemon.y += lemon.speedY * dt * 60;
+                lemon.speedY += this.difficultySettings.gravity * dt * 60;
+                lemon.rotation += lemon.rotationSpeed * dt * 60;
+            } else {
+                // Update the two halves
+                lemon.leftHalf.offsetX += lemon.leftHalf.speedX * dt * 60;
+                lemon.leftHalf.offsetY += lemon.leftHalf.speedY * dt * 60;
+                lemon.leftHalf.speedY += this.difficultySettings.gravity * dt * 60;
+                lemon.leftHalf.rotation += lemon.leftHalf.rotationSpeed * dt * 60;
+                
+                lemon.rightHalf.offsetX += lemon.rightHalf.speedX * dt * 60;
+                lemon.rightHalf.offsetY += lemon.rightHalf.speedY * dt * 60;
+                lemon.rightHalf.speedY += this.difficultySettings.gravity * dt * 60;
+                lemon.rightHalf.rotation += lemon.rightHalf.rotationSpeed * dt * 60;
+            }
+            
+            // Handle boundary collisions
+            this.handleBoundaryCollision(lemon);
+            
+            if (!lemon.sliced && this.checkCollision(lemon)) {
+                lemon.sliced = true;
+                if (lemon.isSpecial) {
+                    this.score += lemon.specialFruit.points;
+                } else {
+                    this.score += 10;
+                }
+                this.fruitsSliced++;
+                this.updateHUD();
+            }
+            
+            // Remove off-screen lemons
+            if (!lemon.sliced && lemon.y > this.canvas.height + 100) {
+                this.lemons.splice(i, 1);
+                this.lives--;
+                this.updateHUD();
+                if (this.lives <= 0) {
+                    this.gameOver();
+                }
+            } else if (lemon.sliced && 
+                      lemon.leftHalf.offsetY > this.canvas.height + 100 && 
+                      lemon.rightHalf.offsetY > this.canvas.height + 100) {
+                this.lemons.splice(i, 1);
+            }
+        }
+    }
+
+    render() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Draw blade trail
         if (this.blade.positions.length > 1) {
@@ -639,69 +732,18 @@ class Game {
             this.ctx.stroke();
         }
         
-        // Update and draw lemons
-        for (let i = this.lemons.length - 1; i >= 0; i--) {
-            const lemon = this.lemons[i];
-            
-            if (!lemon.sliced) {
-                lemon.x += lemon.speedX;
-                lemon.y += lemon.speedY;
-                lemon.speedY += this.difficultySettings.gravity; // Use configured gravity
-                lemon.rotation += lemon.rotationSpeed;
-            } else {
-                // Update the two halves with the same gravity
-                lemon.leftHalf.offsetX += lemon.leftHalf.speedX;
-                lemon.leftHalf.offsetY += lemon.leftHalf.speedY;
-                lemon.leftHalf.speedY += this.difficultySettings.gravity;
-                lemon.leftHalf.rotation += lemon.leftHalf.rotationSpeed;
-                
-                lemon.rightHalf.offsetX += lemon.rightHalf.speedX;
-                lemon.rightHalf.offsetY += lemon.rightHalf.speedY;
-                lemon.rightHalf.speedY += this.difficultySettings.gravity;
-                lemon.rightHalf.rotation += lemon.rightHalf.rotationSpeed;
-            }
-            
-            // Handle boundary collisions
-            this.handleBoundaryCollision(lemon);
-            
-            if (!lemon.sliced && this.checkCollision(lemon)) {
-                lemon.sliced = true;
-                if (lemon.isSpecial) {
-                    this.score += lemon.specialFruit.points;
-                } else {
-                    this.score += 10;
-                }
-                this.fruitsSliced++;
-                this.updateHUD();
-            }
-            
-            // Draw lemon or its halves
+        // Draw lemons
+        for (const lemon of this.lemons) {
             if (!lemon.sliced) {
                 this.drawLemon(lemon);
             } else {
-                this.drawLemonHalf(lemon, true);  // Draw left half
-                this.drawLemonHalf(lemon, false); // Draw right half
-            }
-            
-            // Remove lemons that are off screen
-            if (!lemon.sliced && lemon.y > this.canvas.height + 100) {
-                this.lemons.splice(i, 1);
-                this.lives--;
-                this.updateHUD();
-                if (this.lives <= 0) {
-                    this.gameOver();
-                }
-            } else if (lemon.sliced && 
-                      lemon.leftHalf.offsetY > this.canvas.height + 100 && 
-                      lemon.rightHalf.offsetY > this.canvas.height + 100) {
-                this.lemons.splice(i, 1);
+                this.drawLemonHalf(lemon, true);
+                this.drawLemonHalf(lemon, false);
             }
         }
         
-        // Draw floating texts on top of everything
+        // Draw floating texts
         this.drawFloatingTexts();
-        
-        requestAnimationFrame(() => this.gameLoop());
     }
 
     drawLemon(lemon) {
@@ -800,7 +842,10 @@ class Game {
     }
 }
 
-// Start the game when the page loads
+// Ensure single instance initialization
+let gameInstance = null;
 window.addEventListener('load', () => {
-    new Game();
+    if (!gameInstance) {
+        gameInstance = new Game();
+    }
 }); 
