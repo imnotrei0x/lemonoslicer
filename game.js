@@ -5,6 +5,11 @@ class Game {
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.resizeCanvas();
         
+        // Initialize Hammer.js
+        this.hammer = new Hammer(this.canvas);
+        this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+        this.hammer.get('swipe').set({ direction: Hammer.DIRECTION_ALL });
+        
         this.score = 0;
         this.lives = 3;
         this.lemons = [];
@@ -15,17 +20,17 @@ class Game {
         this.gameStartTime = 0;
         this.difficulty = 1;
         this.floatingTexts = [];
-        this.touchPoints = []; // Store touch points for mobile
+        this.touchPoints = [];
         
         // Mobile-specific settings
         this.mobileSettings = {
-            baseThrowForce: -20,    // Reduced throw force for smaller screen
-            gravity: 0.2,           // Reduced gravity
-            fruitSize: 50,          // Smaller fruit size
-            spawnDelay: 2500,       // Slower initial spawn rate
-            minSpawnDelay: 800,     // Slower minimum spawn rate
-            trailLength: 8,         // Shorter trail for better mobile performance
-            maxFruitsPerSpawn: 2    // Fewer fruits at once
+            baseThrowForce: -20,
+            gravity: 0.2,
+            fruitSize: 50,
+            spawnDelay: 2500,
+            minSpawnDelay: 800,
+            trailLength: 8,
+            maxFruitsPerSpawn: 2
         };
 
         // Desktop settings
@@ -113,6 +118,8 @@ class Game {
         // Load all special fruit images
         this.loadSpecialFruits();
         
+        this.setupEventListeners();
+        this.updateHUD();
         // Prevent zooming on mobile
         document.addEventListener('touchmove', (e) => {
             if (e.touches.length > 1) {
