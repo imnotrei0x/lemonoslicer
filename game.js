@@ -420,7 +420,7 @@ class Game {
         document.getElementById('lives').textContent = `lives: ${this.lives}`;
         const difficultyText = Math.floor((this.difficulty - 1) * 100);
         document.getElementById('difficulty').textContent = 
-            difficultyText > 0 ? `Difficulty: +${difficultyText}%` : '';
+            difficultyText > 0 ? `difficulty: +${difficultyText}%` : '';
     }
 
     createFloatingText(x, y, points) {
