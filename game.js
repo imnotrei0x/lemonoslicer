@@ -75,28 +75,49 @@ class Game {
         // Special fruits configuration with mobile-aware sizing
         this.specialFruits = [
             {
-                name: 'lemonogata',
+                name: 'lemonogata', // lemonogata
                 points: 300,
                 rarity: 0.15,
                 size: this.isMobile ? 70 : 80,
                 image: null
             },
             {
-                name: 'apple',
+                name: 'wife', // catgirlmeowwww (doubles as harrisfootjob too)
+                points: 300, // they are both equally evil...
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
+                image: null
+            },
+            {
+                name: 'twoapple', // bidenfootjob
+                points: 200,
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
+                image: null
+            },
+            {
+                name: 'apple', // (is this actually greipfroutogata?)
                 points: 150,
                 rarity: 0.15,
                 size: this.isMobile ? 70 : 80,
                 image: null
             },
             {
-                name: 'grapefruit',
+                name: 'notlemon', // notlemonogata
+                points: 150,
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
+                image: null
+            },
+            {
+                name: 'grapefruit', // grapefruitogata
                 points: 50,
                 rarity: 0.15,
                 size: this.isMobile ? 70 : 80,
                 image: null
             },
             {
-                name: 'lime',
+                name: 'lime', // laimogata
                 points: 100,
                 rarity: 0.15,
                 size: this.isMobile ? 70 : 80,
