@@ -151,4 +151,28 @@ html, body {
     .game-active {
         cursor: auto; /* Don't hide cursor on mobile */
     }
+}
+
+.social-links {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.social-links a {
+    color: #FFD700;
+    text-decoration: none;
+    font-size: 16px;
+    padding: 5px 10px;
+    border-radius: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.social-links a:hover {
+    background: rgba(255, 215, 0, 0.2);
+    transform: translateY(-2px);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 } 

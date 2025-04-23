@@ -124,17 +124,29 @@ class Game {
             lastY: 0,
             active: false,
             maxPositions: this.isMobile ? this.mobileSettings.trailLength : this.desktopSettings.trailLength,
+            maxPointAge: 100, // Maximum age for trail points in milliseconds
             update(x, y) {
-                // Add new position
-                this.positions.push({ x, y, time: Date.now() });
+                const currentTime = Date.now();
                 
-                // Keep only recent positions for trail effect
+                // Add new position if there's actual movement
+                const dx = x - this.lastX;
+                const dy = y - this.lastY;
+                const movement = Math.sqrt(dx * dx + dy * dy);
+                
+                if (movement > 1) {
+                    this.positions.push({ x, y, time: currentTime });
+                    this.lastX = x;
+                    this.lastY = y;
+                }
+                
+                // Remove old positions
+                const minTime = currentTime - this.maxPointAge;
+                this.positions = this.positions.filter(pos => pos.time >= minTime);
+                
+                // Keep only the maximum number of positions
                 while (this.positions.length > this.maxPositions) {
                     this.positions.shift();
                 }
-                
-                this.lastX = x;
-                this.lastY = y;
             },
             clear() {
                 this.positions = [];
@@ -156,7 +168,7 @@ class Game {
         window.addEventListener('resize', () => {
             this.resizeCanvas();
             if (this.gameActive) {
-                this.adjustGameElementsForResize();
+                this.handleResize();
             }
         });
 
@@ -476,51 +488,56 @@ class Game {
     checkCollision(lemon) {
         if (lemon.sliced) return false;
         
-        for (let i = 1; i < this.blade.positions.length; i++) {
-            const start = this.blade.positions[i - 1];
-            const end = this.blade.positions[i];
+        // Only check the last two actual movement points for collision
+        if (this.blade.positions.length < 2) return false;
+        
+        const currentPos = this.blade.positions[this.blade.positions.length - 1];
+        const prevPos = this.blade.positions[this.blade.positions.length - 2];
+        
+        // Ensure the points are from recent movement (within last frame)
+        const timeDiff = currentPos.time - prevPos.time;
+        if (timeDiff > 32) return false; // Skip if points are too far apart in time
+        
+        const centerX = lemon.x + lemon.width / 2;
+        const centerY = lemon.y + lemon.height / 2;
+        
+        const distance = this.pointToLineDistance(
+            centerX, centerY,
+            prevPos.x, prevPos.y,
+            currentPos.x, currentPos.y
+        );
+        
+        if (distance < (lemon.isSpecial ? 40 : 30)) {
+            // Calculate slice angle based on actual movement
+            lemon.sliceAngle = Math.atan2(currentPos.y - prevPos.y, currentPos.x - prevPos.x);
             
-            const centerX = lemon.x + lemon.width / 2;
-            const centerY = lemon.y + lemon.height / 2;
+            // Set up the physics for the two halves
+            const sliceForce = 8;
+            const perpAngle = lemon.sliceAngle + Math.PI / 2;
             
-            const distance = this.pointToLineDistance(
-                centerX, centerY,
-                start.x, start.y,
-                end.x, end.y
-            );
+            lemon.leftHalf = {
+                offsetX: 0,
+                offsetY: 0,
+                rotation: lemon.rotation,
+                speedX: lemon.speedX - Math.cos(perpAngle) * sliceForce,
+                speedY: lemon.speedY - Math.sin(perpAngle) * sliceForce,
+                rotationSpeed: -0.1
+            };
             
-            if (distance < (lemon.isSpecial ? 40 : 30)) {
-                // Calculate slice angle based on blade movement
-                lemon.sliceAngle = Math.atan2(end.y - start.y, end.x - start.x);
-                
-                // Set up the physics for the two halves
-                const sliceForce = 8;
-                const perpAngle = lemon.sliceAngle + Math.PI / 2;
-                
-                lemon.leftHalf = {
-                    offsetX: 0,
-                    offsetY: 0,
-                    rotation: lemon.rotation,
-                    speedX: lemon.speedX - Math.cos(perpAngle) * sliceForce,
-                    speedY: lemon.speedY - Math.sin(perpAngle) * sliceForce,
-                    rotationSpeed: -0.1
-                };
-                
-                lemon.rightHalf = {
-                    offsetX: 0,
-                    offsetY: 0,
-                    rotation: lemon.rotation,
-                    speedX: lemon.speedX + Math.cos(perpAngle) * sliceForce,
-                    speedY: lemon.speedY + Math.sin(perpAngle) * sliceForce,
-                    rotationSpeed: 0.1
-                };
-                
-                // Create floating score text at slice position
-                const points = lemon.isSpecial ? lemon.specialFruit.points : 10;
-                this.createFloatingText(centerX, centerY, points);
-                
-                return true;
-            }
+            lemon.rightHalf = {
+                offsetX: 0,
+                offsetY: 0,
+                rotation: lemon.rotation,
+                speedX: lemon.speedX + Math.cos(perpAngle) * sliceForce,
+                speedY: lemon.speedY + Math.sin(perpAngle) * sliceForce,
+                rotationSpeed: 0.1
+            };
+            
+            // Create floating score text at slice position
+            const points = lemon.isSpecial ? lemon.specialFruit.points : 10;
+            this.createFloatingText(centerX, centerY, points);
+            
+            return true;
         }
         return false;
     }
@@ -674,11 +691,19 @@ class Game {
         }
     }
 
+    handleResize() {
+        // Update any size-dependent game elements
+        this.blade.clear(); // Clear blade trail on resize
+    }
+
     render() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Draw blade trail
+        // Draw blade trail and/or cursor dot
         if (this.blade.positions.length > 1) {
+            // Update blade trail even if not moving
+            this.blade.update(this.blade.lastX, this.blade.lastY);
+            
             // Draw outer glow
             this.ctx.shadowBlur = 20;
             this.ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
@@ -687,49 +712,79 @@ class Game {
             this.ctx.lineCap = 'round';
             this.ctx.lineJoin = 'round';
             
-            this.ctx.beginPath();
-            
-            // Create gradient for trail
-            const gradient = this.ctx.createLinearGradient(
-                this.blade.positions[0].x, 
-                this.blade.positions[0].y,
-                this.blade.positions[this.blade.positions.length - 1].x,
-                this.blade.positions[this.blade.positions.length - 1].y
-            );
-            
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0.8)');
-            
-            // Draw trail with varying width and opacity
+            // Draw trail with varying width and opacity based on age
             for (let i = 1; i < this.blade.positions.length; i++) {
                 const pos = this.blade.positions[i];
                 const prevPos = this.blade.positions[i - 1];
-                const age = (Date.now() - pos.time) / 1000;
+                const age = Date.now() - pos.time;
+                const opacity = Math.max(0, 1 - age / this.blade.maxPointAge);
                 
                 this.ctx.beginPath();
-                this.ctx.strokeStyle = gradient;
-                this.ctx.lineWidth = Math.max(1, 10 * (1 - i / this.blade.positions.length));
+                this.ctx.strokeStyle = `rgba(255, 255, 255, ${opacity * 0.8})`;
+                this.ctx.lineWidth = Math.max(1, 10 * (1 - i / this.blade.positions.length) * opacity);
                 
                 this.ctx.moveTo(prevPos.x, prevPos.y);
                 this.ctx.lineTo(pos.x, pos.y);
                 this.ctx.stroke();
             }
             
-            // Draw core line (bright white center)
+            // Draw core line (bright white center) only if points are recent
+            if (this.blade.positions.length >= 2) {
+                const lastPointAge = Date.now() - this.blade.positions[this.blade.positions.length - 1].time;
+                if (lastPointAge < 32) { // Only draw core line for very recent movement
+                    this.ctx.shadowBlur = 0;
+                    this.ctx.strokeStyle = 'white';
+                    this.ctx.lineWidth = 2;
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(
+                        this.blade.positions[this.blade.positions.length - 2].x,
+                        this.blade.positions[this.blade.positions.length - 2].y
+                    );
+                    this.ctx.lineTo(
+                        this.blade.positions[this.blade.positions.length - 1].x,
+                        this.blade.positions[this.blade.positions.length - 1].y
+                    );
+                    this.ctx.stroke();
+                }
+            }
+
+            // Draw cursor dot with inverse opacity (more visible when trail fades)
+            let dotOpacity = 0.7;
+            if (this.blade.positions.length > 0) {
+                const lastPos = this.blade.positions[this.blade.positions.length - 1];
+                const age = Date.now() - lastPos.time;
+                dotOpacity = Math.min(1, age / this.blade.maxPointAge);
+            }
+            
+            // Draw outer glow for cursor dot
+            this.ctx.beginPath();
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowColor = `rgba(255, 255, 255, ${dotOpacity * 0.7})`;
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${dotOpacity * 0.7})`;
+            this.ctx.arc(this.blade.lastX, this.blade.lastY, 6, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Draw inner dot
+            this.ctx.beginPath();
             this.ctx.shadowBlur = 0;
-            this.ctx.strokeStyle = 'white';
-            this.ctx.lineWidth = 2;
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${dotOpacity})`;
+            this.ctx.arc(this.blade.lastX, this.blade.lastY, 3, 0, Math.PI * 2);
+            this.ctx.fill();
+        } else if (this.gameActive) {
+            // Draw default cursor dot when no trail exists
+            this.ctx.beginPath();
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowColor = 'rgba(255, 255, 255, 0.7)';
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            this.ctx.arc(this.blade.lastX, this.blade.lastY, 6, 0, Math.PI * 2);
+            this.ctx.fill();
             
             this.ctx.beginPath();
-            this.ctx.moveTo(
-                this.blade.positions[this.blade.positions.length - 2].x,
-                this.blade.positions[this.blade.positions.length - 2].y
-            );
-            this.ctx.lineTo(
-                this.blade.positions[this.blade.positions.length - 1].x,
-                this.blade.positions[this.blade.positions.length - 1].y
-            );
-            this.ctx.stroke();
+            this.ctx.shadowBlur = 0;
+            this.ctx.fillStyle = 'white';
+            this.ctx.arc(this.blade.lastX, this.blade.lastY, 3, 0, Math.PI * 2);
+            this.ctx.fill();
         }
         
         // Draw lemons
