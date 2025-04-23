@@ -128,8 +128,13 @@ class Game {
     }
 
     resizeCanvas() {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
+        // Get the display dimensions
+        const displayWidth = window.innerWidth;
+        const displayHeight = window.innerHeight;
+        
+        // Set canvas dimensions to match display
+        this.canvas.width = displayWidth;
+        this.canvas.height = displayHeight;
     }
 
     setupEventListeners() {
@@ -146,24 +151,37 @@ class Game {
                 const x = touch.clientX - rect.left;
                 const y = touch.clientY - rect.top;
                 this.blade.update(x, y);
-            });
+            }, { passive: false });
 
             this.canvas.addEventListener('touchmove', (e) => {
                 e.preventDefault();
-                if (this.blade.active) {
+                if (this.blade.active && this.gameActive) {
                     const touch = e.touches[0];
                     const rect = this.canvas.getBoundingClientRect();
                     const x = touch.clientX - rect.left;
                     const y = touch.clientY - rect.top;
                     this.blade.update(x, y);
                 }
-            });
+            }, { passive: false });
 
             this.canvas.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 this.blade.active = false;
                 this.blade.positions = [];
-            });
+            }, { passive: false });
+
+            // Add touch events to document for better responsiveness
+            document.addEventListener('touchstart', (e) => {
+                if (this.gameActive) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchmove', (e) => {
+                if (this.gameActive) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
         } else {
             // Mouse events for desktop
             this.canvas.addEventListener('mousemove', (e) => {
@@ -197,11 +215,17 @@ class Game {
         this.gameActive = true;
         this.gameStartTime = Date.now();
         this.difficulty = 1;
+        this.blade.active = false; // Reset blade state
         this.updateHUD();
         
         document.getElementById('menu').classList.add('hidden');
         document.getElementById('game-over').classList.add('hidden');
         document.getElementById('hud').classList.remove('hidden');
+        
+        // For mobile, ensure the canvas size is correct
+        if (this.isMobile) {
+            this.resizeCanvas();
+        }
         
         this.gameLoop();
         this.spawnLemons();
