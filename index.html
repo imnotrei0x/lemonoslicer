@@ -3,20 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>lemono slicer</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="game-container">
         <div id="menu" class="menu">
-            <h1>lemono slicer</h1>
-            <button id="startButton">start slicing</button>
+            <h1>🍋 LEMONO SLICER 🗡️</h1>
+            <button id="startButton">FIGHT THE LEMONOGATA!</button>
         </div>
         <div id="game-over" class="game-over hidden">
-            <h2>lemono won..</h2>
-            <div id="final-score"></div>
-            <div id="fruits-cut"></div>
-            <button id="playAgainButton">try again</button>
+            <h1>lemono won..</h1>
+            <p id="final-score">final score: 0</p>
+            <p id="fruits-cut">lemonos sliced: 0</p>
+            <button id="playAgainButton">slice again?</button>
         </div>
         <div id="hud" class="hud hidden">
             <div id="score">score: 0</div>

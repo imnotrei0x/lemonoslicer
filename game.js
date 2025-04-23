@@ -2,6 +2,7 @@ class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.resizeCanvas();
         
         this.score = 0;
@@ -13,7 +14,30 @@ class Game {
         this.lastSparkleTime = 0;
         this.gameStartTime = 0;
         this.difficulty = 1;
-        this.floatingTexts = []; // Array to store floating score texts
+        this.floatingTexts = [];
+        this.touchPoints = []; // Store touch points for mobile
+        
+        // Mobile-specific settings
+        this.mobileSettings = {
+            baseThrowForce: -20,    // Reduced throw force for smaller screen
+            gravity: 0.2,           // Reduced gravity
+            fruitSize: 50,          // Smaller fruit size
+            spawnDelay: 2500,       // Slower initial spawn rate
+            minSpawnDelay: 800,     // Slower minimum spawn rate
+            trailLength: 8,         // Shorter trail for better mobile performance
+            maxFruitsPerSpawn: 2    // Fewer fruits at once
+        };
+
+        // Desktop settings
+        this.desktopSettings = {
+            baseThrowForce: -30,
+            gravity: 0.3,
+            fruitSize: 60,
+            spawnDelay: 2000,
+            minSpawnDelay: 600,
+            trailLength: 15,
+            maxFruitsPerSpawn: 3
+        };
         
         // Score colors based on point value
         this.scoreColors = {
@@ -24,62 +48,61 @@ class Game {
             300: '#FF69B4'     // Highest bonus: hot pink
         };
         
-        // Special fruits configuration
+        // Special fruits configuration with mobile-aware sizing
         this.specialFruits = [
             {
                 name: 'lemonogata',
                 points: 300,
-                rarity: 0.15, // 15% chance when spawning special
-                size: 80,
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
                 image: null
             },
             {
                 name: 'apple',
                 points: 150,
-                rarity: 0.15, // 15% chance when spawning special
-                size: 80,
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
                 image: null
             },
             {
                 name: 'grapefruit',
                 points: 50,
-                rarity: 0.15, // 15% chance when spawning special
-                size: 80,
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
                 image: null
             },
             {
                 name: 'lime',
                 points: 100,
-                rarity: 0.15, // 15% chance when spawning special
-                size: 80,
+                rarity: 0.15,
+                size: this.isMobile ? 70 : 80,
                 image: null
             }
-
         ];
+
+        // Use appropriate settings based on device
+        const settings = this.isMobile ? this.mobileSettings : this.desktopSettings;
         
-        // Difficulty settings
+        // Difficulty settings with device-specific values
         this.difficultySettings = {
-            baseSpawnDelay: 2000,    // Start with 2 seconds between spawns
-            minSpawnDelay: 600,      // Fastest spawn rate (milliseconds)
-            maxFruitsPerSpawn: 3,    // Maximum fruits to spawn at once
-            difficultyIncrease: 0.1, // How much difficulty increases per 10 seconds
-            maxDifficulty: 3,        // Maximum difficulty multiplier
-            gravity: 0.3,            // Reduced gravity for higher arcs
-            baseThrowForce: -30      // Stronger initial upward velocity
+            baseSpawnDelay: settings.spawnDelay,
+            minSpawnDelay: settings.minSpawnDelay,
+            maxFruitsPerSpawn: settings.maxFruitsPerSpawn,
+            difficultyIncrease: 0.1,
+            maxDifficulty: 3,
+            gravity: settings.gravity,
+            baseThrowForce: settings.baseThrowForce
         };
-        
-        // Load all special fruit images
-        this.loadSpecialFruits();
         
         this.blade = {
             positions: [],
             lastX: 0,
             lastY: 0,
-            active: false, // Track if blade is active (mouse down)
+            active: false,
+            maxPositions: settings.trailLength,
             update(x, y) {
                 this.positions.push({ x, y, time: Date.now() });
-                // Keep more positions for a longer trail
-                while (this.positions.length > 15) {
+                while (this.positions.length > this.maxPositions) {
                     this.positions.shift();
                 }
                 this.lastX = x;
@@ -87,35 +110,21 @@ class Game {
             }
         };
 
-        // Prevent zooming
-        document.addEventListener('wheel', (e) => {
-            if (e.ctrlKey) {
+        // Load all special fruit images
+        this.loadSpecialFruits();
+        
+        // Prevent zooming on mobile
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 1) {
                 e.preventDefault();
             }
         }, { passive: false });
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && (e.key === '+' || e.key === '-')) {
-                e.preventDefault();
-            }
-        });
 
         // Handle window resizing
         window.addEventListener('resize', () => this.resizeCanvas());
         this.setupEventListeners();
         this.updateHUD();
         this.startSparkleAnimation();
-
-        // Add mouse down/up listeners for blade effect
-        window.addEventListener('mousedown', () => {
-            this.blade.active = true;
-        });
-        
-        window.addEventListener('mouseup', () => {
-            this.blade.active = false;
-            // Clear positions when mouse is released
-            this.blade.positions = [];
-        });
     }
 
     resizeCanvas() {
@@ -127,16 +136,54 @@ class Game {
         document.getElementById('startButton').addEventListener('click', () => this.startGame());
         document.getElementById('playAgainButton').addEventListener('click', () => this.startGame());
         
-        this.canvas.addEventListener('mousemove', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            // Only update blade positions if mouse is down or game is active
-            if (this.blade.active || this.gameActive) {
+        if (this.isMobile) {
+            // Touch events for mobile
+            this.canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.blade.active = true;
+                const touch = e.touches[0];
+                const rect = this.canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
                 this.blade.update(x, y);
-            }
-        });
+            });
+
+            this.canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (this.blade.active) {
+                    const touch = e.touches[0];
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    this.blade.update(x, y);
+                }
+            });
+
+            this.canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.blade.active = false;
+                this.blade.positions = [];
+            });
+        } else {
+            // Mouse events for desktop
+            this.canvas.addEventListener('mousemove', (e) => {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                if (this.blade.active || this.gameActive) {
+                    this.blade.update(x, y);
+                }
+            });
+
+            window.addEventListener('mousedown', () => {
+                this.blade.active = true;
+            });
+            
+            window.addEventListener('mouseup', () => {
+                this.blade.active = false;
+                this.blade.positions = [];
+            });
+        }
     }
 
     startGame() {
@@ -223,10 +270,10 @@ class Game {
         
         // Spawn fruits based on current difficulty
         const count = this.getSpawnCount();
-        const spawnWidth = this.canvas.width * 0.8; // Use 80% of screen width
+        const spawnWidth = this.canvas.width * (this.isMobile ? 0.7 : 0.8); // Narrower spawn area on mobile
         const spawnPositions = Array(count).fill(0).map(() => 
             (this.canvas.width - spawnWidth) / 2 + Math.random() * spawnWidth
-        ).sort((a, b) => a - b); // Sort positions to spread fruits out
+        ).sort((a, b) => a - b);
 
         for (let i = 0; i < count; i++) {
             const isSpecial = Math.random() < 0.15;
@@ -235,20 +282,20 @@ class Game {
                 specialFruit = this.getRandomSpecialFruit();
             }
 
-            // Calculate throw force based on screen height
+            // Calculate throw force based on screen height and device type
             const minForce = this.difficultySettings.baseThrowForce;
-            const maxExtraForce = -8;
+            const maxExtraForce = this.isMobile ? -5 : -8; // Less variation on mobile
             const throwForce = minForce - (Math.random() * maxExtraForce * Math.sqrt(this.difficulty));
 
             const lemon = {
                 x: spawnPositions[i],
                 y: this.canvas.height + 50,
-                speedX: (Math.random() - 0.5) * (8 + this.difficulty * 2), // Speed increases with difficulty
-                speedY: throwForce, // Higher throws with stronger initial velocity
+                speedX: (Math.random() - 0.5) * (this.isMobile ? 6 : 8) * (1 + this.difficulty), // Reduced horizontal speed on mobile
+                speedY: throwForce,
                 rotation: Math.random() * Math.PI * 2,
-                rotationSpeed: (Math.random() - 0.5) * 0.2,
-                width: isSpecial ? specialFruit.size : 60,
-                height: isSpecial ? specialFruit.size : 40,
+                rotationSpeed: (Math.random() - 0.5) * (this.isMobile ? 0.15 : 0.2), // Slower rotation on mobile
+                width: isSpecial ? specialFruit.size : (this.isMobile ? 50 : 60),
+                height: isSpecial ? specialFruit.size : (this.isMobile ? 35 : 40),
                 sliced: false,
                 sliceAngle: 0,
                 isSpecial: isSpecial,
@@ -337,7 +384,9 @@ class Game {
             this.ctx.save();
             this.ctx.globalAlpha = text.alpha;
             this.ctx.fillStyle = text.color;
-            this.ctx.font = `${Math.floor(24 * text.scale)}px Arial`;
+            // Adjust font size for mobile
+            const baseFontSize = this.isMobile ? 20 : 24;
+            this.ctx.font = `${Math.floor(baseFontSize * text.scale)}px Arial`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(text.text, text.x, text.y);
