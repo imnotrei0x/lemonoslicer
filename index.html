@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>lemono slicer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-container">
+        <div id="menu" class="menu">
+            <h1>lemono slicer</h1>
+            <button id="startButton">start slicing</button>
+        </div>
+        <div id="game-over" class="game-over hidden">
+            <h2>lemono won..</h2>
+            <div id="final-score"></div>
+            <div id="fruits-cut"></div>
+            <button id="playAgainButton">try again</button>
+        </div>
+        <div id="hud" class="hud hidden">
+            <div id="score">score: 0</div>
+            <div id="lives">lives: 3</div>
+            <div id="difficulty"></div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html> 
