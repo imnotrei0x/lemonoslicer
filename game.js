@@ -5,11 +5,19 @@ class Game {
         this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.resizeCanvas();
         
-        // Initialize Hammer.js
-        this.hammer = new Hammer(this.canvas);
-        this.hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
-        this.hammer.get('swipe').set({ direction: Hammer.DIRECTION_ALL });
-        
+        // Initialize Hammer.js with better touch handling
+        this.hammer = new Hammer.Manager(this.canvas, {
+            touchAction: 'none',
+            inputClass: Hammer.TouchInput,
+            recognizers: [
+                [Hammer.Pan, {
+                    direction: Hammer.DIRECTION_ALL,
+                    threshold: 0,  // No minimum distance required
+                    pointers: 1    // Single finger
+                }]
+            ]
+        });
+
         this.score = 0;
         this.lives = 3;
         this.lemons = [];
@@ -104,14 +112,22 @@ class Game {
             lastX: 0,
             lastY: 0,
             active: false,
-            maxPositions: settings.trailLength,
+            maxPositions: this.isMobile ? this.mobileSettings.trailLength : this.desktopSettings.trailLength,
             update(x, y) {
+                // Add new position
                 this.positions.push({ x, y, time: Date.now() });
+                
+                // Keep only recent positions for trail effect
                 while (this.positions.length > this.maxPositions) {
                     this.positions.shift();
                 }
+                
                 this.lastX = x;
                 this.lastY = y;
+            },
+            clear() {
+                this.positions = [];
+                this.active = false;
             }
         };
 
@@ -128,7 +144,12 @@ class Game {
         }, { passive: false });
 
         // Handle window resizing
-        window.addEventListener('resize', () => this.resizeCanvas());
+        window.addEventListener('resize', () => {
+            this.resizeCanvas();
+            if (this.gameActive) {
+                this.adjustGameElementsForResize();
+            }
+        });
         this.setupEventListeners();
         this.updateHUD();
         this.startSparkleAnimation();
@@ -149,19 +170,50 @@ class Game {
         document.getElementById('playAgainButton').addEventListener('click', () => this.startGame());
         
         if (this.isMobile) {
-            // Touch events for mobile
-            this.canvas.addEventListener('touchstart', (e) => {
-                e.preventDefault();
+            // Handle continuous touch movement
+            this.hammer.on('panstart', (ev) => {
                 this.blade.active = true;
+                const rect = this.canvas.getBoundingClientRect();
+                const x = ev.center.x - rect.left;
+                const y = ev.center.y - rect.top;
+                this.blade.update(x, y);
+            });
+
+            this.hammer.on('panmove', (ev) => {
+                if (this.blade.active && this.gameActive) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = ev.center.x - rect.left;
+                    const y = ev.center.y - rect.top;
+                    this.blade.update(x, y);
+                }
+            });
+
+            this.hammer.on('panend pancancel', () => {
+                this.blade.clear();
+            });
+
+            // Prevent all default touch behaviors
+            const preventDefaults = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+
+            this.canvas.addEventListener('touchstart', preventDefaults, { passive: false });
+            this.canvas.addEventListener('touchmove', preventDefaults, { passive: false });
+            this.canvas.addEventListener('touchend', preventDefaults, { passive: false });
+            this.canvas.addEventListener('touchcancel', preventDefaults, { passive: false });
+
+            // Additional touch event handlers for better response
+            this.canvas.addEventListener('touchstart', (e) => {
                 const touch = e.touches[0];
                 const rect = this.canvas.getBoundingClientRect();
                 const x = touch.clientX - rect.left;
                 const y = touch.clientY - rect.top;
+                this.blade.active = true;
                 this.blade.update(x, y);
             }, { passive: false });
 
             this.canvas.addEventListener('touchmove', (e) => {
-                e.preventDefault();
                 if (this.blade.active && this.gameActive) {
                     const touch = e.touches[0];
                     const rect = this.canvas.getBoundingClientRect();
@@ -171,24 +223,10 @@ class Game {
                 }
             }, { passive: false });
 
-            this.canvas.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                this.blade.active = false;
-                this.blade.positions = [];
+            this.canvas.addEventListener('touchend touchcancel', () => {
+                this.blade.clear();
             }, { passive: false });
 
-            // Add touch events to document for better responsiveness
-            document.addEventListener('touchstart', (e) => {
-                if (this.gameActive) {
-                    e.preventDefault();
-                }
-            }, { passive: false });
-
-            document.addEventListener('touchmove', (e) => {
-                if (this.gameActive) {
-                    e.preventDefault();
-                }
-            }, { passive: false });
         } else {
             // Mouse events for desktop
             this.canvas.addEventListener('mousemove', (e) => {
@@ -205,8 +243,7 @@ class Game {
             });
             
             window.addEventListener('mouseup', () => {
-                this.blade.active = false;
-                this.blade.positions = [];
+                this.blade.clear();
             });
         }
     }
