@@ -134,8 +134,6 @@ class Game {
         // Load all special fruit images
         this.loadSpecialFruits();
         
-        this.setupEventListeners();
-        this.updateHUD();
         // Prevent zooming on mobile
         document.addEventListener('touchmove', (e) => {
             if (e.touches.length > 1) {
@@ -150,9 +148,9 @@ class Game {
                 this.adjustGameElementsForResize();
             }
         });
+
         this.setupEventListeners();
         this.updateHUD();
-        this.startSparkleAnimation();
     }
 
     resizeCanvas() {
